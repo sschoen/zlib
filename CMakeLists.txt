@@ -21,6 +21,11 @@ check_include_file(sys/types.h HAVE_SYS_TYPES_H)
 check_include_file(stdint.h    HAVE_STDINT_H)
 check_include_file(stddef.h    HAVE_STDDEF_H)
 
+option(BUILD_EXAMPLES "" ON)
+option(BUILD_MINIZIP "" ON)
+option(BUILD_STATIC_LIB "" ON)
+option(BUILD_SHARED_LIB "" ON)
+
 #
 # Check to see if we have large file support
 #
@@ -147,12 +152,17 @@ if(MINGW)
     set(ZLIB_DLL_SRCS ${CMAKE_CURRENT_BINARY_DIR}/zlib1rc.obj)
 endif(MINGW)
 
-add_library(zlib SHARED ${ZLIB_SRCS} ${ZLIB_DLL_SRCS} ${ZLIB_PUBLIC_HDRS} ${ZLIB_PRIVATE_HDRS})
-add_library(zlibstatic STATIC ${ZLIB_SRCS} ${ZLIB_PUBLIC_HDRS} ${ZLIB_PRIVATE_HDRS})
-set_target_properties(zlib PROPERTIES DEFINE_SYMBOL ZLIB_DLL)
-set_target_properties(zlib PROPERTIES SOVERSION 1)
+if (BUILD_SHARED_LIB)
+    add_library(zlib SHARED ${ZLIB_SRCS} ${ZLIB_DLL_SRCS} ${ZLIB_PUBLIC_HDRS} ${ZLIB_PRIVATE_HDRS})
+    set_target_properties(zlib PROPERTIES DEFINE_SYMBOL ZLIB_DLL)
+    set_target_properties(zlib PROPERTIES SOVERSION 1)
+endif()
 
-if(NOT CYGWIN)
+if (BUILD_STATIC_LIB)
+    add_library(zlibstatic STATIC ${ZLIB_SRCS} ${ZLIB_PUBLIC_HDRS} ${ZLIB_PRIVATE_HDRS})
+endif()
+
+if(NOT CYGWIN AND BUILD_SHARED_LIBS)
     # This property causes shared libraries on Linux to have the full version
     # encoded into their final filename.  We disable this on Cygwin because
     # it causes cygz-${ZLIB_FULL_VERSION}.dll to be created when cygz.dll
@@ -174,8 +184,16 @@ elseif(BUILD_SHARED_LIBS AND WIN32)
     set_target_properties(zlib PROPERTIES SUFFIX "1.dll")
 endif()
 
-if(NOT SKIP_INSTALL_LIBRARIES AND NOT SKIP_INSTALL_ALL )
-    install(TARGETS zlib zlibstatic
+if(NOT SKIP_INSTALL_LIBRARIES AND NOT SKIP_INSTALL_ALL AND (BUILD_STATIC_LIB OR BUILD_SHARED_LIBS))
+    set(INSTALL_TARGETS "")
+    if (BUILD_SHARED_LIBS)
+        list(APPEND INSTALL_TARGETS zlib)
+    endif()
+    if (BUILD_STATIC_LIBS)
+        list(APPEND INSTALL_TARGETS zlibstatic)
+    endif()
+
+    install(TARGETS ${INSTALL_TARGETS}
         RUNTIME DESTINATION "${INSTALL_BIN_DIR}"
         ARCHIVE DESTINATION "${INSTALL_LIB_DIR}"
         LIBRARY DESTINATION "${INSTALL_LIB_DIR}" )
@@ -194,20 +212,28 @@ endif()
 # Example binaries
 #============================================================================
 
-add_executable(example test/example.c)
-target_link_libraries(example zlib)
-add_test(example example)
+if (BUILD_EXAMPLES AND BUILD_SHARED_LIB)
+    add_executable(example test/example.c)
+    target_link_libraries(example zlib)
+    add_test(example example)
+endif()
 
-add_executable(minigzip test/minigzip.c)
-target_link_libraries(minigzip zlib)
+if (BUILD_MINIZIP AND BUILD_SHARED_LIB)
+    add_executable(minigzip test/minigzip.c)
+    target_link_libraries(minigzip zlib)
+endif()
 
 if(HAVE_OFF64_T)
-    add_executable(example64 test/example.c)
-    target_link_libraries(example64 zlib)
-    set_target_properties(example64 PROPERTIES COMPILE_FLAGS "-D_FILE_OFFSET_BITS=64")
-    add_test(example64 example64)
+    if (BUILD_EXAMPLES AND BUILD_SHARED_LIB)
+        add_executable(example64 test/example.c)
+        target_link_libraries(example64 zlib)
+        set_target_properties(example64 PROPERTIES COMPILE_FLAGS "-D_FILE_OFFSET_BITS=64")
+        add_test(example64 example64)
+    endif()
 
-    add_executable(minigzip64 test/minigzip.c)
-    target_link_libraries(minigzip64 zlib)
-    set_target_properties(minigzip64 PROPERTIES COMPILE_FLAGS "-D_FILE_OFFSET_BITS=64")
+    if (BUILD_MINIZIP AND BUILD_SHARED_LIB)
+        add_executable(minigzip64 test/minigzip.c)
+        target_link_libraries(minigzip64 zlib)
+        set_target_properties(minigzip64 PROPERTIES COMPILE_FLAGS "-D_FILE_OFFSET_BITS=64")
+    endif()
 endif()
